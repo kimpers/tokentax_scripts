@@ -22,7 +22,4 @@ Before uploading, you must:
      Manually replace all REPv1 and REPv2 with REP in TokenTax, as well.
 
 ## To-Do
-    * Does not currently account for the gas cost paid for the transaction. Technically, this should be 
-      added as the "Fee" for a TokenTax transaction.
-    * It ignores any refunded tokens from aggregation on 0x. This is normally a dust amount (like 1 cent),
-      so can generally be ignored.
+    * Currently ignores any refunded tokens from aggregation through 0x. This should always be a dust amount caused by rounding errors.

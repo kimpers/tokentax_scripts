@@ -56,10 +56,19 @@ def flattenTransfers(transfers, transferType, ignoreTokens = []):
 def processTrade(txType, txInfo, wallet):
     # Construct single withdrawal
     withdrawal = None
+    protocolFee = '0'
     try: 
         # First try with ignoring ETH (protocol fee)
         withdrawal = flattenTransfers(txInfo['transfers'], 'Withdrawal', 'ETH')
+
+        # Since we were able to generate a withdrawal without using ETH, any ETH included was a protocol fee.
+        ethWithdrawals = [t for t in txInfo['transfers'] if t['type'] == 'Withdrawal' and t['token'] == 'ETH']
+        if len(ethWithdrawals) == 1:
+            protocolFee = ethWithdrawals[0]['amount']
+        elif len(ethWithdrawals) > 1:
+            raise Exception('Cannot handle multiple withdrawals of ETH')
     except:
+        # Withdrawal was ETH / no protocol fee
         withdrawal = flattenTransfers(txInfo['transfers'], 'Withdrawal')
    
     # Construct single Deposit.
@@ -79,6 +88,13 @@ def processTrade(txType, txInfo, wallet):
         # Try to get the deposit token, now ignoring the protocol fee token.
         deposit = flattenTransfers(txInfo['transfers'], 'Deposit', [protocolFeeToken, withdrawal['token']])
 
+    # Construct Fee
+    feeCurrency = ''
+    feeAmount = '0'
+    if txInfo['sentByWallet']:
+        feeCurrency = 'ETH'
+        feeAmount = str(float(txInfo['gasCost']) + float(protocolFee))
+
     # Construct trade
     trade = {
         'Type': txType, 
@@ -86,8 +102,8 @@ def processTrade(txType, txInfo, wallet):
         'BuyCurrency': deposit['token'],
         'SellAmount': withdrawal['amount'],
         'SellCurrency': withdrawal['token'],
-        'FeeAmount': '0',
-        'FeeCurrency': '',
+        'FeeAmount': feeAmount,
+        'FeeCurrency': feeCurrency,
         'Exchange': 'ZeroEx',
         'Group': '',
         'Comment': 'ZeroEx Tx - ' + txInfo['hash'],
@@ -136,7 +152,7 @@ def processWallet(csvWriter, wallet, targetContracts, txType, onlyDirect):
 
     for tx in transactions:
         if tx['isError'] != '0':
-            # This tx failed
+            # This tx failed, ignore it.
             continue
 
         txHashes.append(tx['hash'])
@@ -144,6 +160,7 @@ def processWallet(csvWriter, wallet, targetContracts, txType, onlyDirect):
             'hash': tx['hash'],
             'timestamp': tx['timeStamp'],
             'sentByWallet': True,
+            'gasCost': str((float(tx['gasPrice']) * float(tx['gasUsed'])) / 10**18),
             'contract': tx['to'],
             'transfers': []
         }
